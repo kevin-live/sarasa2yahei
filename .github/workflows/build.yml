@@ -12,13 +12,12 @@ jobs:
       local_tag: ${{ steps.get_local_tag.outputs.tag }}
       upstream_tag: ${{ steps.get_upstream_tag.outputs.tag }}
       sc_download_url: ${{ steps.get_sc_download_url.outputs.url }}
-      cl_download_url: ${{ steps.get_cl_download_url.outputs.url }}
 
     steps:
       - name: Get Local Tag
         id: get_local_tag
         run: |
-          LOCAL_LATEST_TAG=$(curl -s https://api.github.com/repos/ffainy/sarasa2yahei/releases/latest | jq -r '.tag_name')
+          LOCAL_LATEST_TAG=$(curl -s https://api.github.com/repos/kevin-live/sarasa2yahei/releases/latest | jq -r '.tag_name')
           echo "tag=$LOCAL_LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo $LOCAL_LATEST_TAG
 
@@ -32,17 +31,10 @@ jobs:
       - name: Get SC Download URL
         id: get_sc_download_url
         run: |
-          DOWNLOAD_URL_SC=$(curl -s https://api.github.com/repos/be5invis/Sarasa-Gothic/releases/latest | jq -r '.assets[] | select(.name | contains("SarasaUiSC-TTF-Unhinted")) | .browser_download_url')
+          DOWNLOAD_URL_SC=$(curl -s https://api.github.com/repos/be5invis/Sarasa-Gothic/releases/latest | jq -r '.assets[] | select(.name | contains("SarasaUiSC-TTF-") and (contains("SarasaUiSC-TTF-Unhinted") | not)) | .browser_download_url')
           echo "url=$DOWNLOAD_URL_SC" >> "$GITHUB_OUTPUT"
           echo $DOWNLOAD_URL_SC
-
-      - name: Get CL Download URL
-        id: get_cl_download_url
-        run: |
-          DOWNLOAD_URL_CL=$(curl -s https://api.github.com/repos/be5invis/Sarasa-Gothic/releases/latest | jq -r '.assets[] | select(.name | contains("SarasaUiCL-TTF-Unhinted")) | .browser_download_url')
-          echo "url=$DOWNLOAD_URL_CL" >> "$GITHUB_OUTPUT"
-          echo $DOWNLOAD_URL_CL
-
+          
   job2:
     runs-on: ubuntu-latest
     needs: job1
@@ -61,33 +53,18 @@ jobs:
           mkdir /tmp/fonts
           DL_DIR=/tmp/fonts
           echo "DL_DIR=$DL_DIR" >> $GITHUB_ENV
-          mkdir /tmp/fonts/cl
-          DL_DIR_CL=/tmp/fonts/cl
-          echo "DL_DIR_CL=$DL_DIR_CL" >> $GITHUB_ENV
           mkdir /tmp/fonts/sc
           DL_DIR_SC=/tmp/fonts/sc
           echo "DL_DIR_SC=$DL_DIR_SC" >> $GITHUB_ENV
           cd $DL_DIR
-          echo $DL_DIR && echo $DL_DIR_CL && echo $DL_DIR_SC
+          echo $DL_DIR && echo $DL_DIR_SC
           curl -Lvo sc-fonts.7z ${{ needs.job1.outputs.sc_download_url }}
           7z e sc-fonts.7z SarasaUiSC-Regular.ttf SarasaUiSC-Light.ttf SarasaUiSC-Bold.ttf
-          curl -Lvo cl-fonts.7z ${{ needs.job1.outputs.cl_download_url }}
-          7z e cl-fonts.7z SarasaUiCL-Regular.ttf SarasaUiCL-Light.ttf SarasaUiCL-Bold.ttf
           for file in *; do
             if [ -f "$file" ]; then
               echo $file
             fi
           done
-
-      - name: Generate Patched CL Fonts
-        run: |
-          python3 exec_cl.py
-
-      - name: Compress CL Fonts
-        run: |
-          cd $DL_DIR_CL
-          7z a cl-unhinted-yahei-${{ needs.job1.outputs.upstream_tag }}.7z msyh*
-          7z a cl-unhinted-simsun-${{ needs.job1.outputs.upstream_tag }}.7z simsun*
 
       - name: Generate Patched SC Fonts
         run: |
@@ -96,13 +73,12 @@ jobs:
       - name: Compress SC Fonts
         run: |
           cd $DL_DIR_SC
-          7z a sc-unhinted-yahei-${{ needs.job1.outputs.upstream_tag }}.7z msyh*
-          7z a sc-unhinted-simsun-${{ needs.job1.outputs.upstream_tag }}.7z simsun*
+          7z a sc-yahei-simsun-${{ needs.job1.outputs.upstream_tag }}.7z msyh* simsun*
 
       - name: Calculate SHA1
         run: |
           cd $DL_DIR
-          find "$DL_DIR_CL" "$DL_DIR_SC" -type f -name "*.7z" > filelist.txt
+          find "$DL_DIR_SC" -type f -name "*.7z" > filelist.txt
           while read -r file; do
             filename=$(basename "$file")
             sha1=$(sha1sum "$file" | awk '{print $1}')
@@ -115,10 +91,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ needs.job1.outputs.upstream_tag }}
           prerelease: false
-          name: sarasa2yahei-unhinted-${{ needs.job1.outputs.upstream_tag }}
+          name: sarasa2yahei-${{ needs.job1.outputs.upstream_tag }}
           body_path: ${{ env.DL_DIR }}/sha1.txt
           files: |
-            ${{ env.DL_DIR_CL }}/*.7z
             ${{ env.DL_DIR_SC }}/*.7z
-
 
