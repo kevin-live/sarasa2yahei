@@ -11,7 +11,8 @@ jobs:
     outputs:
       local_tag: ${{ steps.get_local_tag.outputs.tag }}
       upstream_tag: ${{ steps.get_upstream_tag.outputs.tag }}
-      sc_download_url: ${{ steps.get_sc_download_url.outputs.url }}
+      hinted_download_url: ${{ steps.get_hinted_download_url.outputs.url }}
+      unhinted_download_url: ${{ steps.get_unhinted_download_url.outputs.url }}
 
     steps:
       - name: Get Local Tag
@@ -28,12 +29,19 @@ jobs:
           echo "tag=$UPSTREAM_LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo $UPSTREAM_LATEST_TAG
 
-      - name: Get SC Download URL
-        id: get_sc_download_url
+      - name: Get Hinted Download URL
+        id: get_hinted_download_url
         run: |
-          DOWNLOAD_URL_SC=$(curl -s https://api.github.com/repos/be5invis/Sarasa-Gothic/releases/latest | jq -r '.assets[] | select(.name | contains("SarasaUiSC-TTF-") and (contains("SarasaUiSC-TTF-Unhinted") | not)) | .browser_download_url')
-          echo "url=$DOWNLOAD_URL_SC" >> "$GITHUB_OUTPUT"
-          echo $DOWNLOAD_URL_SC
+          DOWNLOAD_URL_HINTED=$(curl -s https://api.github.com/repos/be5invis/Sarasa-Gothic/releases/latest | jq -r '.assets[] | select(.name | contains("SarasaUiSC-TTF-") and (contains("SarasaUiSC-TTF-Unhinted") | not)) | .browser_download_url')
+          echo "url=$DOWNLOAD_URL_HINTED" >> "$GITHUB_OUTPUT"
+          echo $DOWNLOAD_URL_HINTED
+
+      - name: Get Unhinted Download URL
+        id: get_unhinted_download_url
+        run: |
+          DOWNLOAD_URL_UNHINTED=$(curl -s https://api.github.com/repos/be5invis/Sarasa-Gothic/releases/latest | jq -r '.assets[] | select(.name | contains("SarasaUiSC-TTF-Unhinted")) | .browser_download_url')
+          echo "url=$DOWNLOAD_URL_UNHINTED" >> "$GITHUB_OUTPUT"
+          echo $DOWNLOAD_URL_UNHINTED
           
   job2:
     runs-on: ubuntu-latest
@@ -53,32 +61,43 @@ jobs:
           mkdir /tmp/fonts
           DL_DIR=/tmp/fonts
           echo "DL_DIR=$DL_DIR" >> $GITHUB_ENV
-          mkdir /tmp/fonts/sc
-          DL_DIR_SC=/tmp/fonts/sc
-          echo "DL_DIR_SC=$DL_DIR_SC" >> $GITHUB_ENV
+          mkdir /tmp/fonts/hinted
+          DL_DIR_HINTED=/tmp/fonts/hinted
+          echo "DL_DIR_HINTED=$DL_DIR_HINTED" >> $GITHUB_ENV
+          mkdir /tmp/fonts/unhinted
+          DL_DIR_UNHINTED=/tmp/fonts/unhinted
+          echo "DL_DIR_UNHINTED=$DL_DIR_UNHINTED" >> $GITHUB_ENV
           cd $DL_DIR
-          echo $DL_DIR && echo $DL_DIR_SC
-          curl -Lvo sc-fonts.7z ${{ needs.job1.outputs.sc_download_url }}
-          7z e sc-fonts.7z SarasaUiSC-Regular.ttf SarasaUiSC-Light.ttf SarasaUiSC-Bold.ttf
+          echo $DL_DIR && echo $DL_DIR_HINTED && echo $DL_DIR_UNHINTED
+          cd $DL_DIR_HINTED
+          curl -Lvo hinted-fonts.7z ${{ needs.job1.outputs.hinted_download_url }}
+          7z e hinted-fonts.7z SarasaUiSC-Regular.ttf SarasaUiSC-Light.ttf SarasaUiSC-Bold.ttf
+          cd $DL_DIR_UNHINTED
+          curl -Lvo unhinted-fonts.7z ${{ needs.job1.outputs.unhinted_download_url }}
+          7z e unhinted-fonts.7z SarasaUiSC-Regular.ttf SarasaUiSC-Light.ttf SarasaUiSC-Bold.ttf
           for file in *; do
             if [ -f "$file" ]; then
               echo $file
             fi
           done
 
-      - name: Generate Patched SC Fonts
+      - name: Generate Patched Fonts
         run: |
           python3 exec_sc.py
 
-      - name: Compress SC Fonts
+      - name: Compress Fonts
         run: |
-          cd $DL_DIR_SC
-          7z a sc-yahei-simsun-${{ needs.job1.outputs.upstream_tag }}.7z msyh* simsun*
+          cd $DL_DIR_HINTED
+          rm *.7z
+          7z a hinted-${{ needs.job1.outputs.upstream_tag }}.7z msyh* simsun*
+          cd $DL_DIR_UNHINTED
+          rm *.7z
+          7z a unhinted-${{ needs.job1.outputs.upstream_tag }}.7z msyh* simsun*
 
       - name: Calculate SHA1
         run: |
           cd $DL_DIR
-          find "$DL_DIR_SC" -type f -name "*.7z" > filelist.txt
+          find "$DL_DIR_HINTED" "$DL_DIR_UNHINTED" -type f -name "*.7z" > filelist.txt
           while read -r file; do
             filename=$(basename "$file")
             sha1=$(sha1sum "$file" | awk '{print $1}')
@@ -94,5 +113,6 @@ jobs:
           name: sarasa2yahei-${{ needs.job1.outputs.upstream_tag }}
           body_path: ${{ env.DL_DIR }}/sha1.txt
           files: |
-            ${{ env.DL_DIR_SC }}/*.7z
+            ${{ env.DL_DIR_HINTED }}/*.7z
+            ${{ env.DL_DIR_UNHINTED }}/*.7z
 

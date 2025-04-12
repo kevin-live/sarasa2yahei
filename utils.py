@@ -1,8 +1,8 @@
 import fontforge as ff
 
 DOWNLOAD_DIR = '/tmp/fonts'
-OUTPUT_DIR_CL = DOWNLOAD_DIR + '/cl'
-OUTPUT_DIR_SC = DOWNLOAD_DIR + '/sc'
+DIR_HINTED = DOWNLOAD_DIR + '/hinted'
+DIR_UNHINTED = DOWNLOAD_DIR + '/unhinted'
 COPYRIGHT = 'sarasa2yahei'
 
 
